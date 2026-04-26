@@ -1,39 +1,26 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-let players = {};
-
 io.on('connection', (socket) => {
-    console.log(`Nouvelle connexion : ${socket.id}`);
+    console.log(`NOUVELLE CONNEXION : ${socket.id}`);
 
-    // Attribution du rôle selon le nombre de connectés
-    const count = Object.keys(players).length;
-    const side = count === 0 ? 'left' : 'right';
-    
-    players[socket.id] = { side: side };
+    // On envoie un message de test toutes les 2 secondes à ce socket précis
+    const timer = setInterval(() => {
+        socket.emit('server_debug', 'Le serveur te voit !');
+    }, 2000);
 
-    // ON ENVOIE LE RÔLE IMMÉDIATEMENT
-    socket.emit('role', side);
-    console.log(`Rôle ${side} envoyé à ${socket.id}`);
-
-    socket.on('move', (y) => {
-        socket.broadcast.emit('opponentMove', y);
-    });
-
-    socket.on('ballSync', (ballData) => {
-        socket.broadcast.emit('ballUpdate', ballData);
-    });
+    // On envoie le rôle immédiatement
+    socket.emit('role', 'left'); 
 
     socket.on('disconnect', () => {
-        delete players[socket.id];
-        console.log(`Déconnexion : ${socket.id}`);
+        clearInterval(timer);
+        console.log("Joueur parti");
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Serveur prêt sur le port ${PORT}`));
+server.listen(PORT, () => console.log("Debug Server Live"));
