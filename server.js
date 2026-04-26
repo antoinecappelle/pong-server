@@ -5,7 +5,10 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*" } // Très important pour autoriser Discord/GitHub Pages
+    cors: {
+        origin: "*", // Autorise toutes les sources
+        methods: ["GET", "POST"]
+    }
 });
 
 let players = {};
