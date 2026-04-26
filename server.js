@@ -45,9 +45,13 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         console.log(`[SERVEUR] Départ de ${socket.id}`);
         if (rooms[socket.roomId]) {
+            // On prévient l'autre joueur AVANT de supprimer la room
+            socket.to(socket.roomId).emit('opponentLeft', 'L\'adversaire a quitté la partie.');
+            
             rooms[socket.roomId] = rooms[socket.roomId].filter(id => id !== socket.id);
-            if (rooms[socket.roomId].length === 0) delete rooms[socket.roomId];
-            else io.to(socket.roomId).emit('error', 'Adversaire déconnecté');
+            if (rooms[socket.roomId].length === 0) {
+                delete rooms[socket.roomId];
+            }
         }
     });
 });
