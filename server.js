@@ -4,43 +4,58 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: "*", // Autorise toutes les sources
-        methods: ["GET", "POST"]
-    }
+const io = new Server(server, { 
+    cors: { origin: "*" } 
 });
 
-let players = {};
+let rooms = {}; // Structure : { roomId: [socketId1, socketId2] }
 
 io.on('connection', (socket) => {
-    console.log('Connecté:', socket.id);
+    console.log(`Nouvelle tentative de connexion : ${socket.id}`);
 
-    // Attribution des rôles
-    if (Object.keys(players).length === 0) {
-        players[socket.id] = { side: 'left' };
-        socket.emit('role', 'left');
-    } else if (Object.keys(players).length === 1) {
-        players[socket.id] = { side: 'right' };
-        socket.emit('role', 'right');
-    } else {
-        socket.emit('error', 'Partie pleine');
+    // Trouver une room avec une seule personne
+    let roomId = Object.keys(rooms).find(id => rooms[id].length === 1);
+
+    if (!roomId) {
+        // Aucune place libre, on crée une nouvelle room
+        roomId = socket.id;
+        rooms[roomId] = [];
     }
 
-    // Relais des mouvements de raquette
+    // Rejoindre la room
+    rooms[roomId].push(socket.id);
+    socket.join(roomId);
+    socket.currentRoom = roomId;
+
+    // Déterminer le rôle
+    const side = rooms[roomId].length === 1 ? 'left' : 'right';
+    socket.emit('role', side);
+    console.log(`Joueur ${socket.id} assigné à ${side} dans la room ${roomId}`);
+
+    // Relais des mouvements (uniquement dans la room)
     socket.on('move', (y) => {
-        socket.broadcast.emit('opponentMove', y);
+        socket.to(socket.currentRoom).emit('opponentMove', y);
     });
 
-    // Relais de la position de la balle (calculée par le joueur de gauche)
+    // Relais de la balle (uniquement dans la room)
     socket.on('ballSync', (ballData) => {
-        socket.broadcast.emit('ballUpdate', ballData);
+        socket.to(socket.currentRoom).emit('ballUpdate', ballData);
     });
 
     socket.on('disconnect', () => {
-        delete players[socket.id];
+        const rId = socket.currentRoom;
+        if (rooms[rId]) {
+            rooms[rId] = rooms[rId].filter(id => id !== socket.id);
+            if (rooms[rId].length === 0) {
+                delete rooms[rId];
+            } else {
+                // Informer l'autre joueur que l'adversaire est parti
+                socket.to(rId).emit('error', 'L\'adversaire a quitté la partie.');
+            }
+        }
+        console.log(`Joueur ${socket.id} déconnecté`);
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Serveur prêt sur le port ${PORT}`));
+server.listen(PORT, () => console.log(`Serveur Multi-Lobby sur port ${PORT}`));
